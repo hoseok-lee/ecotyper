@@ -1,8 +1,8 @@
 suppressPackageStartupMessages({
 library(config)
 library(argparse)
-source("pipeline/lib/config.R") 
-source("pipeline/lib/misc.R") 
+source("pipeline/lib/config.R")
+source("pipeline/lib/misc.R")
 source("pipeline/lib/multithreading.R")
 })
 
@@ -10,7 +10,7 @@ parser <- ArgumentParser(add_help = F)
 
 arguments = parser$add_argument_group('Arguments')
 
-arguments$add_argument("-c", "--config", type = "character", metavar="<PATH>", 
+arguments$add_argument("-c", "--config", type = "character", metavar="<PATH>",
     help="Path to the config files [required].")
 arguments$add_argument("-h", "--help", action='store_true', help="Print help message.")
 
@@ -25,7 +25,8 @@ if(args$h || is.null(args$config))
 config_file = abspath(args$config)
 
 config <- config::get(file = config_file)
-check_discovery_configuration_scRNA(config)
+check_discovery_configuration_AnnData(config)
+#check_discovery_configuration_scRNA(config)
 
 discovery = config$Input$"Discovery dataset name"
 discovery_type = config$Input$"Expression type"
@@ -44,7 +45,7 @@ p_value_cutoff = config$"Pipeline settings"$"Jaccard matrix p-value cutoff"
 min_states = config$"Pipeline settings"$"Minimum number of states in ecotypes"
 
 suppressWarnings({
-	final_output = abspath(final_output)	
+	final_output = abspath(final_output)
 })
 
 #Starting EcoTyper
@@ -72,16 +73,16 @@ if(!1 %in% skip_steps & fractions != "All_genes")
 {
 	cat("\nStep 1 (extract cell type specific genes)...\n")
 
-	annotation = read.delim(file.path(file.path("../datasets/discovery", discovery, "annotation.txt")))	
-	cell_types = unlist(levels(as.factor(as.character(annotation$CellType))))	
+	annotation = read.delim(file.path(file.path("../datasets/discovery", discovery, "annotation.txt")))
+	cell_types = unlist(levels(as.factor(as.character(annotation$CellType))))
 	for(cell_type in cell_types)
 	{
 		print(cell_type)
-		PushToJobQueue(paste("Rscript state_discovery_scRNA_filter_genes.R", discovery, fractions, cell_type, scale_column))	
+		PushToJobQueue(paste("Rscript state_discovery_scRNA_filter_genes.R", discovery, fractions, cell_type, scale_column))
 	}
-	RunJobQueue()	
+	RunJobQueue()
 	cat("Step 1 (extract cell type specific genes) finished successfully!\n")
-	
+
 }else{
 	cat("Skipping step 1 (extract cell type specific genes)...\n")
 }
@@ -90,22 +91,22 @@ if(!2 %in% skip_steps)
 {
 	cat("\nStep 2 (cell state discovery on correrlation matrices): Calculating correlation matrices...\n")
 
-	annotation = read.delim(file.path(file.path("../datasets/discovery", discovery, "annotation.txt")))	
-	cell_types = unlist(levels(as.factor(as.character(annotation$CellType))))	
+	annotation = read.delim(file.path(file.path("../datasets/discovery", discovery, "annotation.txt")))
+	cell_types = unlist(levels(as.factor(as.character(annotation$CellType))))
 
 	for(cell_type in cell_types)
 	{
 		filter_genes = (fractions == "Cell_type_specific_genes") || grepl("Top_", fractions)
-		PushToJobQueue(paste("Rscript state_discovery_scRNA_distances.R", discovery, fractions, cell_type, filter_genes, scale_column))	
-	}	
-	RunJobQueue() 
-	
+		PushToJobQueue(paste("Rscript state_discovery_scRNA_distances.R", discovery, fractions, cell_type, filter_genes, scale_column))
+	}
+	RunJobQueue()
+
 	cat("Step 2 (cell state discovery on correrlation matrices): Running NMF (Warning: This step might take a long time!)...\n")
 
 	for(cell_type in cell_types)
-	{		
+	{
 		if(!file.exists(file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery_cross_cor", cell_type, "expression_top_genes_scaled.txt")))
-		{			
+		{
 			next
 		}
 		for(n_clusters in 2:max_clusters)
@@ -115,28 +116,28 @@ if(!2 %in% skip_steps)
 				if(!file.exists(file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery_cross_cor", cell_type, n_clusters, "restarts", restart, "estim.RData")))
 				{
 					PushToJobQueue(paste("Rscript state_discovery_NMF.R", "discovery_cross_cor", discovery, fractions, cell_type, n_clusters, restart))
-				}else{					
+				}else{
 					cat(paste0("Warning: Skipping NMF on '", cell_type, "' (number of states = ", n_clusters, ", restart ", restart, "), as the output file '", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "restarts", restart, "estim.RData"), "' already exists!\n"))
 				}
-			} 
-		}			
-	} 
+			}
+		}
+	}
 	RunJobQueue()
-		
+
 	cat("Step 2 (cell state discovery on correrlation matrices): Aggregating NMF results...\n")
 	for(cell_type in cell_types)
-	{	
+	{
 		if(!file.exists(file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery_cross_cor", cell_type, "expression_top_genes_scaled.txt")))
-		{			
+		{
 			next
-		}				
+		}
 		PushToJobQueue(paste("Rscript state_discovery_combine_NMF_restarts.R", "discovery_cross_cor", discovery, fractions, cell_type, max_clusters, nmf_restarts))
-	} 
+	}
 	RunJobQueue()
 	cat("Step 2 (cell state discovery on correrlation matrices) finished successfully!\n")
 }else{
 	cat("Skipping step 2 (cell state discovery on correrlation matrices)...\n")
-}	
+}
 
 if(!3 %in% skip_steps)
 {
@@ -151,16 +152,16 @@ if(!3 %in% skip_steps)
 if(!4 %in% skip_steps)
 {
 	cat("\nStep 4 (extracting cell state information)...\n")
-	
+
 	system(paste("cp -f ", paste0("'", config_file, "'"), file.path("../EcoTyper", discovery, "config_used.yml")))
 
 	key = read.delim(file.path("../EcoTyper", discovery, fractions, "Analysis", "rank_selection", "rank_data.txt"))
 	for(cell_type in key[,1])
-	{	
+	{
 		cat(paste("Extracting cell states information for:", cell_type, "\n"))
 		n_clusters = key[key[,1] == cell_type, 2]
-		PushToJobQueue(paste("Rscript state_discovery_initial_plots_scRNA.R", "discovery_cross_cor", discovery, fractions, cell_type, n_clusters, "State", paste(additional_columns, collapse = " "))) 		 
-	}	
+		PushToJobQueue(paste("Rscript state_discovery_initial_plots_scRNA.R", "discovery_cross_cor", discovery, fractions, cell_type, n_clusters, "State", paste(additional_columns, collapse = " ")))
+	}
 	RunJobQueue()
 	cat("Step 4 (extracting cell state information) finished successfully!\n")
 }else{
@@ -173,62 +174,62 @@ if(!5 %in% skip_steps)
 
 	key = read.delim(file.path("../EcoTyper", discovery, fractions, "Analysis", "rank_selection", "rank_data.txt"))
 	for(cell_type in key[,1])
-	{	
+	{
 		cat(paste("Extracting marker genes for cell states defined in:", cell_type, "\n"))
 		n_clusters = key[key[,1] == cell_type, 2]
-		PushToJobQueue(paste("Rscript state_discovery_extract_features_scRNA.R", discovery, fractions, cell_type, n_clusters)) 		 
-	}	
+		PushToJobQueue(paste("Rscript state_discovery_extract_features_scRNA.R", discovery, fractions, cell_type, n_clusters))
+	}
 	RunJobQueue()
-	
+
 	cat("\nStep 5 (cell state re-discovery in expression matrices): Running NMF on expression matrix...\n")
 
 	key = read.delim(file.path("../EcoTyper", discovery, fractions, "Analysis", "rank_selection", "rank_data.txt"))
 	for(cell_type in key[,1])
 	{
 		if(!file.exists(file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, "expression_top_genes_scaled.txt")))
-		{			
+		{
 			next
 		}
-		
+
 		n_clusters = key[key[,1] == cell_type, 2]
 		for(restart in 1:nmf_restarts)
 		{
 			if(!file.exists(file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "restarts", restart, "estim.RData")))
 			{
 				PushToJobQueue(paste("Rscript state_discovery_NMF.R", "discovery", discovery, fractions, cell_type, n_clusters, restart))
-			}else{					
+			}else{
 				cat(paste0("Warning: Skipping NMF on '", cell_type, "' (number of states = ", n_clusters, ", restart ", restart, "), as the output file '", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "restarts", restart, "estim.RData"), "' already exists!\n"))
 			}
-		} 
-	} 
+		}
+	}
 	RunJobQueue()
-		
+
 	cat("Step 5 (cell state re-discovery in expression matrices): Aggregating NMF results...\n")
 	for(cell_type in key[,1])
-	{	
+	{
 		if(!file.exists(file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, "expression_top_genes_scaled.txt")))
-		{			
+		{
 			next
-		}				
+		}
 		PushToJobQueue(paste("Rscript state_discovery_combine_NMF_restarts.R", "discovery", discovery, fractions, cell_type, max_clusters, nmf_restarts, "FALSE"))
-	} 
+	}
 	RunJobQueue()
 	cat("Step 5 (cell state re-discovery in expression matrices) finished successfully!\n")
 }else{
 	cat("Skipping step 5 (cell state re-discovery in expression matrices)...\n")
-}	
+}
 
-if(!6 %in% skip_steps) 
+if(!6 %in% skip_steps)
 {
 	cat("\nStep 6 (extracting information for re-discovered cell states)...\n")
 
 	key = read.delim(file.path("../EcoTyper", discovery, fractions, "Analysis", "rank_selection", "rank_data.txt"))
 	for(cell_type in key[,1])
-	{	
+	{
 		cat(paste("Extracting cell states information for:", cell_type, "\n"))
 		n_clusters = key[key[,1] == cell_type, 2]
-		PushToJobQueue(paste("Rscript state_discovery_initial_plots.R", "discovery", discovery, fractions, cell_type, n_clusters, "State", paste(additional_columns, collapse = " "))) 		 
-	}	
+		PushToJobQueue(paste("Rscript state_discovery_initial_plots.R", "discovery", discovery, fractions, cell_type, n_clusters, "State", paste(additional_columns, collapse = " ")))
+	}
 	RunJobQueue()
 	cat("Step 6 (extracting information for re-discovered cell states) finished successfully!\n")
 }else{
@@ -241,11 +242,11 @@ if(!7 %in% skip_steps)
 
 	key = read.delim(file.path("../EcoTyper", discovery, fractions, "Analysis", "rank_selection", "rank_data.txt"))
 	for(cell_type in key[,1])
-	{	
+	{
 		cat(paste("Filtering low-quality cell states for:", cell_type, "\n"))
 		n_clusters = key[key[,1] == cell_type, 2]
-		PushToJobQueue(paste("Rscript state_discovery_first_filter_scRNA.R", discovery, fractions, cell_type, n_clusters, "State", paste(additional_columns, collapse = " "))) 		 
-	}	
+		PushToJobQueue(paste("Rscript state_discovery_first_filter_scRNA.R", discovery, fractions, cell_type, n_clusters, "State", paste(additional_columns, collapse = " ")))
+	}
 	RunJobQueue()
 	cat("Step 7 (cell state QC filter) finished successfully!\n")
 }else{
@@ -257,7 +258,7 @@ if(!8 %in% skip_steps)
 	cat("\nStep 8 (ecotype discovery)...\n")
 	PushToJobQueue(paste("Rscript ecotypes_scRNA.R", discovery, fractions, p_value_cutoff, min_states))
 	RunJobQueue()
-	PushToJobQueue(paste("Rscript ecotypes_assign_samples_scRNA.R", discovery, fractions, "Ecotype",paste(additional_columns, collapse = " "))) 
+	PushToJobQueue(paste("Rscript ecotypes_assign_samples_scRNA.R", discovery, fractions, "Ecotype",paste(additional_columns, collapse = " ")))
 	cat("Step 8 (ecotype discovery) finished successfully!\n")
 	RunJobQueue()
 }else{
@@ -270,7 +271,7 @@ if(file.exists(final_output) && length(list.files(final_output)) > 0)
 {
 	old_results_folder = paste0(final_output, format(Sys.time(), " %a %b %d %X %Y"))
 	dir.create(old_results_folder, recursive = T, showWarnings = F)
-	warning(paste0("The output folder contains files from a previous run. Moving those files to: '", old_results_folder, "'"))	
+	warning(paste0("The output folder contains files from a previous run. Moving those files to: '", old_results_folder, "'"))
 	system(paste0("mv -f ", paste0("'", final_output, "'"), "/* '", old_results_folder, "'"))
 }
 
@@ -282,8 +283,8 @@ system(paste("cp -f", file.path("../EcoTyper", discovery, fractions, "Analysis",
 
 key = read.delim(file.path("../EcoTyper", discovery, fractions, "Analysis", "rank_selection", "rank_data.txt"))
 for(cell_type in key[,1])
-{		
-	n_clusters = key[key[,1] == cell_type, 2]	
+{
+	n_clusters = key[key[,1] == cell_type, 2]
 	ct_output = file.path(final_output, cell_type)
 	dir.create(ct_output, recursive = T, showWarnings = F)
 	system(paste("cp -f", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "gene_info.txt"), paste0("'", ct_output, "'")))
@@ -292,8 +293,8 @@ for(cell_type in key[,1])
 	system(paste("cp -f", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "state_assignment_heatmap.pdf"), paste0("'", ct_output, "'")))
 	system(paste("cp -f", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "state_assignment_heatmap.png"), paste0("'", ct_output, "'")))
 	system(paste("cp -f", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "heatmap_data.txt"), paste0("'", ct_output, "'")))
-	system(paste("cp -f", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "heatmap_top_ann.txt"), paste0("'", ct_output, "'")))	
-}	
+	system(paste("cp -f", file.path("../EcoTyper", discovery, fractions, "Cell_States", "discovery", cell_type, n_clusters, "heatmap_top_ann.txt"), paste0("'", ct_output, "'")))
+}
 
 ct_output = file.path(final_output, "Ecotypes")
 dir.create(ct_output, recursive = T, showWarnings = F)
