@@ -49,7 +49,7 @@ raw_input = raw_input[,colnames(raw_input) %in% annotation$ID]
 
 log_data = log2(raw_input + 1)
 
-# write.table(log_data, file.path(output_dir, "expression_full_matrix_log2.txt"), sep = "\t", row.names = T)
+write.table(log_data, file.path(output_dir, "expression_full_matrix_log2.txt"), sep = "\t", row.names = T)
 
 clinical = read_clinical(colnames(log_data), dataset = dataset, dataset_type = "discovery")
 if(is.na(scaling_column))
@@ -61,7 +61,7 @@ if(is.na(scaling_column))
 
 scaled_data = scale_data(log_data, by = by)
 scaled_data[is.na(scaled_data)] = 0
-# write.table(scaled_data, file.path(output_dir, "expression_full_matrix_scaled.txt"), sep = "\t")
+write.table(scaled_data, file.path(output_dir, "expression_full_matrix_scaled.txt"), sep = "\t")
 
 if(filter_genes)
 {
@@ -77,7 +77,7 @@ if(filter_genes)
 	cat(paste0("Not filtering '", cell_type, "' profiles for cell type specific genes, using the full transcriptome...\n"))
 }
 
-# write.table(scaled_data, file.path(output_dir, "expression_top_genes_scaled_filt.txt"), sep = "\t")
+write.table(scaled_data, file.path(output_dir, "expression_top_genes_scaled_filt.txt"), sep = "\t")
 
 d = fastCor(scaled_data)
 write.table(as.matrix(d), file.path(output_dir, "expression_top_genes_scaled.txt"), sep = "\t")
